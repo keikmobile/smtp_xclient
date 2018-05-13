@@ -134,3 +134,5 @@ if (__FILE__ eq $0){
   print $smtp->send_cmd(".");
   print $smtp->send_cmd("QUIT");
 }
+
+1;
