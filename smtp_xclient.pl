@@ -5,9 +5,14 @@ use Getopt::Long qw(:config posix_default no_ignore_case gnu_compat);
 use FindBin;
 use IO::Socket;
 
-my $smtphost = '127.0.0.1';
-my $smtpport = 25;
-my $help;
+my $SMTPHOST  = '127.0.0.1';
+my $SMTPPORT  = 25;
+my $XADDR = undef;
+my $XNAME = undef;
+my $HELODOMAIN = 'localhost';
+my $MAILFROM   = 'localhost@localhost';
+my $RCPTTO     = 'localhost@localhost';
+my $help = undef;
 
 #------------------------------------------------------------------------------
 # SMTP
@@ -19,8 +24,8 @@ sub new {
     bless {
         sock        => undef,
         res_reg     => qr{^[2-5][0-9][0-9][ ].+}x,
-        host        => '',
-        port        => '',
+        host        => undef,
+        port        => undef,
         %args,
     }, $class;
 }
@@ -82,10 +87,34 @@ sub send_cmd {
     return $buf;
 }
 
+sub cmd_xclient {
+    my ( $self, $xaddr , $xname ) = @_;
+    my $buf = '';
+    my $xclient = "XCLIENT";
+    if ($xaddr){ $xclient .= " ADDR=$xaddr" }
+    if ($xname){ $xclient .= " NAME=$xname" }
+    $buf .= $self->send_cmd($xclient);
+    return $buf;
+}
+
+sub cmd_help {
+    my ( $self, $helodomain ) = @_;
+    my $buf = '';
+    $buf .= $self->send_cmd("HELO $helodomain");
+    return $buf;
+}
+
+sub cmd_ehlo {
+    my ( $self, $helodomain ) = @_;
+    my $buf = '';
+    $buf .= $self->send_cmd("EHLO $helodomain");
+    return $buf;
+}
+
 1;
 
-
 package main;
+
 
 #------------------------------------------------------------------------------
 # USAGE
@@ -94,8 +123,11 @@ sub usage {
     print <<"USAGE";
 Usage: $0 [options] 
 [smtp options]
---host                : smtphost : $smtphost
---port                : smtpport : $smtphost
+--host                : smtp host : $SMTPHOST
+--port                : smtp port : $SMTPHOST
+--xaddr               : xclient addr : $XADDR
+--xname               : xclient name : $XNAME
+--helodomain          : smtp helo domain :  $HELODOMAIN
 --help                : help
 USAGE
     exit 1;
@@ -106,9 +138,12 @@ USAGE
 #------------------------------------------------------------------------------
 sub set_opt {
     GetOptions(
-        'host=s' => \$smtphost,
-        'port=i' => \$smtpport,
-        'help' => \$help,
+        'host=s'  =>      \$SMTPHOST,
+        'port=i'  =>      \$SMTPPORT,
+        'xaddr=s' =>      \$XADDR,
+        'xname=s' =>      \$XNAME,
+        'helodomain=s' => \$HELODOMAIN,
+        'help'    =>      \$help,
     );
 }
 
@@ -116,23 +151,42 @@ sub set_opt {
 # MAIN
 #------------------------------------------------------------------------------
 
+sub send_message {
+  my ($arg_ref) = @_;
+  my $host =  $arg_ref->{host}  ? $arg_ref->{host}  : $SMTPHOST;
+  my $port =  $arg_ref->{port}  ? $arg_ref->{port}  : $SMTPPORT;
+  my $xaddr = $arg_ref->{xaddr} ? $arg_ref->{xaddr} : undef;
+  my $xname = $arg_ref->{xname} ? $arg_ref->{xname} : undef;
+  my $helodomain = $arg_ref->{helodomain} ? $arg_ref->{helodomain} : $HELODOMAIN;
 
-$SIG{INT} = sub { exit };
-
-
-if (__FILE__ eq $0){
-  set_opt();
-  if ($help) { usage; }
   my $smtp = SMTPClient->new();
-  print $smtp->connect_serv($smtphost,$smtpport);
-  print $smtp->send_cmd("EHLO localhost");
-  print $smtp->send_cmd("XCLIENT ADDR=168.100.189.2");
+  print $smtp->connect_serv($host,$port);
+  if( $xaddr or $xname ){
+    print $smtp->cmd_xclient($xaddr,$xname);
+  }
+  print $smtp->cmd_ehlo("EHLO $helodomain");
   print $smtp->send_cmd("MAIL FROM:<>");
   print $smtp->send_cmd("RCPT TO:<vagrant\@localhost>");
   print $smtp->send_cmd("DATA");
   print $smtp->send_line("TEST MESSAGE");
   print $smtp->send_cmd(".");
   print $smtp->send_cmd("QUIT");
+}
+
+$SIG{INT} = sub { exit };
+
+if (__FILE__ eq $0){
+  set_opt();
+  if ($help) { usage; }
+  send_message(
+    {
+      host => $SMTPHOST,
+      port => $SMTPPORT,
+      xaddr => $XADDR,
+      xname => $XNAME,
+      helodomain => $HELODOMAIN
+    }
+  );
 }
 
 1;
