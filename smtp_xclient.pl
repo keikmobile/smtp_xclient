@@ -114,6 +114,36 @@ sub cmd_ehlo {
     return $buf;
 }
 
+sub cmd_mailfrom {
+    my ( $self, $mailfrom ) = @_;
+    my $buf = '';
+    $buf .= $self->send_cmd("MAIL FROM:<$mailfrom>");
+    return $buf;
+}
+
+sub cmd_rcptto {
+    my ( $self, $rcptto ) = @_;
+    my $buf = '';
+    $buf .= $self->send_cmd("RCPT TO:<$rcptto>");
+    return $buf;
+}
+
+sub cmd_data {
+    my ( $self, $message ) = @_;
+    my $buf = '';
+    $buf .= $self->send_cmd("DATA");
+    $buf .= $self->send_line($message);
+    $buf .= $self->send_cmd(".");
+    return $buf;
+}
+
+sub cmd_quit {
+    my ( $self ) = @_;
+    my $buf = '';
+    $buf .= $self->send_cmd("QUIT");
+    return $buf;
+}
+
 1;
 
 package main;
@@ -177,12 +207,10 @@ sub send_message {
     print $smtp->cmd_xclient($xaddr,$xname);
   }
   print $smtp->cmd_ehlo($helodomain);
-  print $smtp->send_cmd("MAIL FROM:<$mailfrom>");
-  print $smtp->send_cmd("RCPT TO:<$rcptto>");
-  print $smtp->send_cmd("DATA");
-  print $smtp->send_line("$message");
-  print $smtp->send_cmd(".");
-  print $smtp->send_cmd("QUIT");
+  print $smtp->cmd_mailfrom($mailfrom);
+  print $smtp->cmd_rcptto($rcptto);
+  print $smtp->cmd_data("$message");
+  print $smtp->cmd_quit();
 }
 
 $SIG{INT} = sub { exit };
