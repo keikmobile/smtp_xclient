@@ -7,11 +7,13 @@ use IO::Socket;
 
 my $SMTPHOST  = '127.0.0.1';
 my $SMTPPORT  = 25;
-my $XADDR = undef;
-my $XNAME = undef;
+my $XADDR      = undef;
+my $XNAME      = undef;
 my $HELODOMAIN = 'localhost';
 my $MAILFROM   = 'localhost@localhost';
-my $RCPTTO     = 'localhost@localhost';
+my $RCPTTO     = 'vagrant@localhost';
+my $MESSAGE_FILE    = undef;
+my $MESSAGE         = 'TEST MESSAGE';
 my $help = undef;
 
 #------------------------------------------------------------------------------
@@ -23,7 +25,7 @@ sub new {
     my %args = ref $args[0] eq 'HASH' ? %{ $args[0] } : @args;
     bless {
         sock        => undef,
-        res_reg     => qr{^[2-5][0-9][0-9][ ].+}x,
+        res_reg     => qr{^([2-5][0-9][0-9])[ ].+}x,
         host        => undef,
         port        => undef,
         %args,
@@ -52,6 +54,7 @@ sub recv_res {
          $line = $self->sock->getline or die print "Error: $!";
          $buf .= $line;
       } until ( $line =~ $self->res_reg );
+      my $res_code = $1;
       return $buf;
     }
 }
@@ -97,7 +100,7 @@ sub cmd_xclient {
     return $buf;
 }
 
-sub cmd_help {
+sub cmd_helo {
     my ( $self, $helodomain ) = @_;
     my $buf = '';
     $buf .= $self->send_cmd("HELO $helodomain");
@@ -122,12 +125,15 @@ package main;
 sub usage {
     print <<"USAGE";
 Usage: $0 [options] 
-[smtp options]
+[options:description:defalt]
 --host                : smtp host : $SMTPHOST
 --port                : smtp port : $SMTPHOST
---xaddr               : xclient addr : $XADDR
---xname               : xclient name : $XNAME
---helodomain          : smtp helo domain :  $HELODOMAIN
+--xaddr               : xclient addr
+--xname               : xclient name
+--helodomain          : helo domain : $HELODOMAIN
+--mailfrom            : mail from   : $MAILFROM
+--rcptto              : rcpt to     : $RCPTTO
+--message_file        : message file 
 --help                : help
 USAGE
     exit 1;
@@ -138,11 +144,14 @@ USAGE
 #------------------------------------------------------------------------------
 sub set_opt {
     GetOptions(
-        'host=s'  =>      \$SMTPHOST,
-        'port=i'  =>      \$SMTPPORT,
-        'xaddr=s' =>      \$XADDR,
-        'xname=s' =>      \$XNAME,
-        'helodomain=s' => \$HELODOMAIN,
+        'host=s'  =>  \$SMTPHOST,
+        'port=i'  =>  \$SMTPPORT,
+        'xaddr=s' =>  \$XADDR,
+        'xname=s' =>  \$XNAME,
+        'helodomain=s'   => \$HELODOMAIN,
+        'from=s'         => \$MAILFROM,
+        'rcpt=s'         => \$RCPTTO,
+        'message_file=s' => \$MESSAGE_FILE,
         'help'    =>      \$help,
     );
 }
@@ -158,17 +167,20 @@ sub send_message {
   my $xaddr = $arg_ref->{xaddr} ? $arg_ref->{xaddr} : undef;
   my $xname = $arg_ref->{xname} ? $arg_ref->{xname} : undef;
   my $helodomain = $arg_ref->{helodomain} ? $arg_ref->{helodomain} : $HELODOMAIN;
+  my $mailfrom   = $arg_ref->{mailfrom} ? $arg_ref->{mailfrom} : undef;
+  my $rcptto     = $arg_ref->{rcptto}   ? $arg_ref->{rcptto}   : undef;
+  my $message    = $arg_ref->{message}  ? $arg_ref->{message}  : $MESSAGE;
 
   my $smtp = SMTPClient->new();
   print $smtp->connect_serv($host,$port);
   if( $xaddr or $xname ){
     print $smtp->cmd_xclient($xaddr,$xname);
   }
-  print $smtp->cmd_ehlo("EHLO $helodomain");
-  print $smtp->send_cmd("MAIL FROM:<>");
-  print $smtp->send_cmd("RCPT TO:<vagrant\@localhost>");
+  print $smtp->cmd_ehlo($helodomain);
+  print $smtp->send_cmd("MAIL FROM:<$mailfrom>");
+  print $smtp->send_cmd("RCPT TO:<$rcptto>");
   print $smtp->send_cmd("DATA");
-  print $smtp->send_line("TEST MESSAGE");
+  print $smtp->send_line("$message");
   print $smtp->send_cmd(".");
   print $smtp->send_cmd("QUIT");
 }
@@ -178,13 +190,25 @@ $SIG{INT} = sub { exit };
 if (__FILE__ eq $0){
   set_opt();
   if ($help) { usage; }
+
+  if($MESSAGE_FILE){
+    open( my $FILE, '<', $MESSAGE_FILE ) or die "Can't open '$MESSAGE_FILE': $!";
+    $MESSAGE = '';
+    while (my $line = <$FILE>) {
+      $MESSAGE .= $line;
+    }
+    close $FILE;
+  }
+  
   send_message(
     {
       host => $SMTPHOST,
       port => $SMTPPORT,
       xaddr => $XADDR,
       xname => $XNAME,
-      helodomain => $HELODOMAIN
+      mailfrom => $MAILFROM,
+      rcptto   => $RCPTTO,
+      message  => $MESSAGE
     }
   );
 }
