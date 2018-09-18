@@ -5,10 +5,10 @@ use IO::Socket::INET;
 
 my $SMTPHOST='127.0.0.1';
 my $SMTPPORT=20025;
-
-use_ok 'smtp_xclient';
 system("smtp-sink $SMTPHOST:$SMTPPORT 5 &");
 sleep 1;
+
+use_ok 'smtp_xclient';
 
 my $smtp = SMTPClient->new();
 isa_ok($smtp, 'SMTPClient' );
@@ -20,6 +20,8 @@ like($smtp->cmd_rcptto('localhost@localhost'), '/RCPT TO:.+\r\n250/' ,"MAIL FROM
 like($smtp->cmd_data('TEST Message'), '/DATA\r\n354/' ,"DATA command");
 like($smtp->cmd_quit(),  '/QUIT\r\n221/' ,'QUIT and Close connection');
 
-system("pkill -u $ENV{USER} smtp-sink");
+END{
+  system("pkill -u $ENV{USER} smtp-sink");
+}
 
 done_testing();

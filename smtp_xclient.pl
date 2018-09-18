@@ -24,11 +24,11 @@ sub new {
     my ( $class, @args ) = @_;
     my %args = ref $args[0] eq 'HASH' ? %{ $args[0] } : @args;
     bless {
-        sock        => undef,
-        res_reg     => qr{^([2-5][0-9][0-9])[ ].+}x,
-        host        => undef,
-        port        => undef,
-        res_code     => undef,
+        sock     => undef,
+        res_reg  => qr{^([2-5][0-9][0-9])[ ].+}x,
+        host     => undef,
+        port     => undef,
+        res_code => undef,
         %args,
     }, $class;
 }
@@ -39,6 +39,14 @@ sub sock {
         $self->{sock} = $sock;
     }
     return $self->{sock};
+}
+
+sub res_code {
+    my ($self, $res_code) = @_;
+    if ($res_code) {
+        $self->{res_code} = $res_code;
+    }
+    return $self->{res_code};
 }
 
 sub res_reg {
@@ -55,9 +63,17 @@ sub recv_res {
          $line = $self->sock->getline or die print "Error: $!";
          $buf .= $line;
       } until ( $line =~ $self->res_reg );
-         $self->{res_code} = $1;
+         $self->res_code($1);
       return $buf;
     }
+}
+
+sub send_line {
+    my ( $self, $line ) = @_;
+    if ( defined $self->sock ) {
+      $self->sock->printflush($line . "\r\n");
+    }
+    return $line . "\r\n";
 }
 
 sub connect_serv {
@@ -75,17 +91,13 @@ sub connect_serv {
   return $buf;
 }
 
-sub send_line {
-    my ( $self, $line ) = @_;
-    if ( defined $self->sock ) {
-      $self->sock->printflush($line . "\r\n");
-    }
-    return $line . "\r\n";
-}
-
 sub send_cmd {
     my ( $self, $cmd ) = @_;
     my $buf = '';
+    if ( $self->res_code =~ /^[45]/){
+      $buf .= $self->send_line("QUIT");
+      $buf .= $self->recv_res();
+    }
     $buf .= $self->send_line($cmd);
     $buf .= $self->recv_res();
     return $buf;
