@@ -28,6 +28,7 @@ sub new {
         res_reg     => qr{^([2-5][0-9][0-9])[ ].+}x,
         host        => undef,
         port        => undef,
+        res_code     => undef,
         %args,
     }, $class;
 }
@@ -54,7 +55,7 @@ sub recv_res {
          $line = $self->sock->getline or die print "Error: $!";
          $buf .= $line;
       } until ( $line =~ $self->res_reg );
-      my $res_code = $1;
+         $self->{res_code} = $1;
       return $buf;
     }
 }
