@@ -72,8 +72,8 @@ sub send_line {
     my ( $self, $line ) = @_;
     if ( defined $self->sock ) {
       $self->sock->printflush($line . "\r\n");
+      return $line . "\r\n";
     }
-    return $line . "\r\n";
 }
 
 sub connect_serv {
@@ -97,6 +97,8 @@ sub send_cmd {
     if ( $self->res_code =~ /^[45]/){
       $buf .= $self->send_line("QUIT");
       $buf .= $self->recv_res();
+      $self->{sock} = undef;
+      return $buf;
     }
     $buf .= $self->send_line($cmd);
     $buf .= $self->recv_res();
